@@ -5,11 +5,21 @@ import xml.etree.ElementTree as ET
 import json
 import io
 import re
+from functools import wraps
 
 mcp = FastMCP("Android Mobile MCP Server")
 device = None
 
 ui_coords = set()
+
+def require_device(func):
+    """Decorator to check if device is initialized before executing the function."""
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        if device is None:
+            return "Error: Device not initialized. Please call mobile_init() first to establish connection with Android device."
+        return func(*args, **kwargs)
+    return wrapper
 
 def parse_bounds(bounds_str):
     if not bounds_str or bounds_str == '':
@@ -20,13 +30,13 @@ def parse_bounds(bounds_str):
         center_x = (x1 + x2) // 2
         center_y = (y1 + y2) // 2
         return {"x": center_x, "y": center_y, "bounds": [x1, y1, x2, y2]}
-    except:
+    except Exception:
         return None
 
 def get_children_texts(element):
+    """Check if element has any focusable children"""
     child_texts = []
     seen = set()
-    """Check if element has any focusable children"""
     for child in list(element.iter())[1:]:
         child_text = child.get('text', '').strip()
         if child_text and child_text not in seen:
@@ -99,14 +109,13 @@ def mobile_init() -> str:
         return f"Error initializing device: {str(e)}"
 
 @mcp.tool()
+@require_device
 def mobile_dump_ui() -> str:
     """Get UI elements from Android screen as JSON with hierarchical structure.
     
     Returns a JSON structure where elements contain their child elements, showing parent-child relationships.
     Only includes focusable elements or elements with text/content_desc/hint attributes.
     """
-    if device is None:
-        return "Error: Device not initialized. Please call mobile_init() first to establish connection with Android device."
     return _mobile_dump_ui()
 
 def _mobile_dump_ui():
@@ -114,7 +123,6 @@ def _mobile_dump_ui():
         xml_content = device.dump_hierarchy()
         root = ET.fromstring(xml_content)
         
-        global current_ui_state
         ui_coords.clear()
 
         ui_elements = extract_ui_elements(root)
@@ -124,6 +132,7 @@ def _mobile_dump_ui():
         return f"Error processing XML: {str(e)}"
 
 @mcp.tool()
+@require_device
 def mobile_click(x: int, y: int) -> str:
     """Click on a specific coordinate on the Android screen.
     
@@ -131,8 +140,6 @@ def mobile_click(x: int, y: int) -> str:
         x: X coordinate to click
         y: Y coordinate to click
     """
-    if device is None:
-        return "Error: Device not initialized. Please call mobile_init() first to establish connection with Android device."
     try:
         _mobile_dump_ui()
         global ui_coords
@@ -145,6 +152,7 @@ def mobile_click(x: int, y: int) -> str:
         return f"Error clicking coordinate ({x}, {y}): {str(e)}"
 
 @mcp.tool()
+@require_device
 def mobile_type(text: str, submit: bool = False) -> str:
     """Input text into the currently focused text field on Android.
     
@@ -152,8 +160,6 @@ def mobile_type(text: str, submit: bool = False) -> str:
         text: The text to input
         submit: Whether to submit text (press Enter key) after typing
     """
-    if device is None:
-        return "Error: Device not initialized. Please call mobile_init() first to establish connection with Android device."
     try:
         device.send_keys(text)
         if submit:
@@ -164,14 +170,13 @@ def mobile_type(text: str, submit: bool = False) -> str:
         return f"Error inputting text: {str(e)}"
 
 @mcp.tool()
+@require_device
 def mobile_key_press(button: str) -> str:
     """Press a physical or virtual button on the Android device.
     
     Args:
         button: Button name (BACK, HOME, RECENT, ENTER)
     """
-    if device is None:
-        return "Error: Device not initialized. Please call mobile_init() first to establish connection with Android device."
     button_map = {
         "BACK": "back",
         "HOME": "home",
@@ -188,6 +193,7 @@ def mobile_key_press(button: str) -> str:
         return f"Error pressing {button} button: {str(e)}"
 
 @mcp.tool()
+@require_device
 def mobile_swipe(start_x: int, start_y: int, end_x: int, end_y: int, duration: float = 0.5) -> str:
     """Perform a swipe gesture on the Android screen.
     
@@ -198,8 +204,6 @@ def mobile_swipe(start_x: int, start_y: int, end_x: int, end_y: int, duration: f
         end_y: Ending Y coordinate
         duration: Duration of swipe in seconds (default: 0.5)
     """
-    if device is None:
-        return "Error: Device not initialized. Please call mobile_init() first to establish connection with Android device."
     try:
         duration_ms = int(duration * 1000)
         cmd = f"input swipe {start_x} {start_y} {end_x} {end_y} {duration_ms}"
@@ -208,8 +212,8 @@ def mobile_swipe(start_x: int, start_y: int, end_x: int, end_y: int, duration: f
     except Exception as e:
         return f"Error swiping: {str(e)}"
 
-def is_system_app(package):
-    exclude_patterns = [
+SYSTEM_APP_PATTERNS = [
+    re.compile(p) for p in [
         r"^com\.android\.systemui",
         r"^com\.android\.providers\.",
         r"^com\.android\.internal\.",
@@ -222,7 +226,10 @@ def is_system_app(package):
         r"\.auto_generated_rro_",
         r"^android$",
     ]
-    return any(re.search(p, package) for p in exclude_patterns)
+]
+
+def is_system_app(package):
+    return any(p.search(package) for p in SYSTEM_APP_PATTERNS)
 
 def is_launchable_app(package):
     if is_system_app(package):
@@ -236,13 +243,12 @@ def is_launchable_app(package):
         return False
 
 @mcp.tool()
+@require_device
 def mobile_list_apps() -> str:
     """List all installed applications on the Android device.
     
     Returns a JSON array with package names and application labels.
     """
-    if device is None:
-        return "Error: Device not initialized. Please call mobile_init() first to establish connection with Android device."
     try:
         apps = device.app_list()
         launchable_apps = [pkg for pkg in apps if is_launchable_app(pkg)]
@@ -251,14 +257,13 @@ def mobile_list_apps() -> str:
         return f"Error listing apps: {str(e)}"
 
 @mcp.tool()
+@require_device
 def mobile_launch_app(package_name: str) -> str:
     """Launch an application by its package name.
     
     Args:
         package_name: The package name of the app to launch (e.g., 'com.android.chrome')
     """
-    if device is None:
-        return "Error: Device not initialized. Please call mobile_init() first to establish connection with Android device."
     try:
         apps = device.app_list()
         if package_name not in apps:
@@ -270,13 +275,12 @@ def mobile_launch_app(package_name: str) -> str:
         return f"Error launching app {package_name}: {str(e)}"
 
 @mcp.tool()
+@require_device
 def mobile_take_screenshot() -> Image:
     """Take a screenshot of the current Android screen.
     
     Returns an image object that can be viewed by the LLM.
     """
-    if device is None:
-        return "Error: Device not initialized. Please call mobile_init() first to establish connection with Android device."
     try:
         screenshot = device.screenshot()
     
