@@ -5,6 +5,7 @@ import xml.etree.ElementTree as ET
 import json
 import io
 import re
+import shlex
 
 mcp = FastMCP("Android Mobile MCP Server")
 device = None
@@ -227,7 +228,7 @@ def is_launchable_app(package):
         return False
     
     try:
-        response = device.shell(f"cmd package resolve-activity --brief {package}")
+        response = device.shell(f"cmd package resolve-activity --brief {shlex.quote(package)}")
         output = response.output
         return "/" in output
     except Exception:
