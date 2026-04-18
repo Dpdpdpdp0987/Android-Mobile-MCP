@@ -112,7 +112,6 @@ def _mobile_dump_ui():
         xml_content = device.dump_hierarchy()
         root = ET.fromstring(xml_content)
         
-        global current_ui_state
         ui_coords.clear()
 
         ui_elements = extract_ui_elements(root)
