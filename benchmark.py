@@ -1,3 +1,5 @@
+# Standalone benchmark for the get_children_texts optimization.
+# Kept separate from the main module to avoid affecting production code paths.
 import time
 import xml.etree.ElementTree as ET
 
