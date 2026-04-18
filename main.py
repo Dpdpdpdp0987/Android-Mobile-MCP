@@ -235,6 +235,7 @@ def is_launchable_app(package):
         return False
     
     try:
+        # Quote the package to avoid shell injection when resolving launchable activities.
         response = device.shell(f"cmd package resolve-activity --brief {shlex.quote(package)}")
         output = response.output
         return "/" in output
