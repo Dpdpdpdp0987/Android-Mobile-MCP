@@ -1,7 +1,7 @@
 import uiautomator2 as u2
 from fastmcp import FastMCP
 from fastmcp.utilities.types import Image
-import xml.etree.ElementTree as ET
+import defusedxml.ElementTree as ET
 import json
 import io
 import re
