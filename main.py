@@ -5,7 +5,6 @@ import xml.etree.ElementTree as ET
 import json
 import io
 import re
-import shlex
 from functools import wraps
 
 mcp = FastMCP("Android Mobile MCP Server")
@@ -235,7 +234,6 @@ def is_launchable_app(package):
         return False
     
     try:
-        # Quote the package to avoid shell injection when resolving launchable activities.
         response = device.shell(f"cmd package resolve-activity --brief {shlex.quote(package)}")
         output = response.output
         return "/" in output
@@ -250,9 +248,28 @@ def mobile_list_apps() -> str:
     Returns a JSON array with package names and application labels.
     """
     try:
-        apps = device.app_list()
-        launchable_apps = [pkg for pkg in apps if is_launchable_app(pkg)]
-        return json.dumps(launchable_apps, ensure_ascii=False, indent=2)
+        # Get all installed apps
+        installed_apps = set(device.app_list())
+
+        # Get all packages that have a MAIN action and LAUNCHER category intent
+        response = device.shell(
+            "cmd package query-activities -a android.intent.action.MAIN -c android.intent.category.LAUNCHER"
+        )
+
+        # Extract unique package names using a regular expression
+        launchable_packages = set(re.findall(r"packageName=([^s]+)", response.output))
+
+        # Filter: installed + launchable + not system app
+        result_apps = [
+            pkg
+            for pkg in launchable_packages
+            if pkg in installed_apps and not is_system_app(pkg)
+        ]
+
+        # Sort for consistent output
+        result_apps.sort()
+
+        return json.dumps(result_apps, ensure_ascii=False, indent=2)
     except Exception as e:
         return f"Error listing apps: {str(e)}"
 
