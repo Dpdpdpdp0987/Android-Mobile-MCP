@@ -20,7 +20,7 @@ def parse_bounds(bounds_str):
         center_x = (x1 + x2) // 2
         center_y = (y1 + y2) // 2
         return {"x": center_x, "y": center_y, "bounds": [x1, y1, x2, y2]}
-    except:
+    except Exception:
         return None
 
 def get_children_texts(element):
