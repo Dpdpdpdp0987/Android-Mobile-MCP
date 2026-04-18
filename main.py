@@ -24,8 +24,8 @@ def parse_bounds(bounds_str):
         return None
 
 def get_children_texts(element):
-    child_texts = []
     """Check if element has any focusable children"""
+    child_texts = []
     for child in list(element.iter())[1:]:
         child_text = child.get('text', '').strip()
         if child_text and child_text not in child_texts:
